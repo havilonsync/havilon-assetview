@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { auth } from "@/auth/config";
 
 const PUBLIC_ROUTES = ["/login", "/register", "/api/auth", "/api/stripe/webhook"];
 
@@ -19,9 +19,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) return NextResponse.next();
 
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  const session = await auth();
+  const user = session?.user as {
+    id?: string;
+    role?: string;
+    companyId?: string;
+  } | undefined;
 
-  if (!token) {
+  if (!user?.id) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -29,9 +34,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (token.role === "admin") return NextResponse.next();
+  if (user.role === "admin") return NextResponse.next();
 
-  const allowed = (ROLE_ROUTES[token.role as string] ?? []);
+  const allowed = (ROLE_ROUTES[user.role as string] ?? []);
   const hasAccess = allowed.some((p: string) => p === "/" || pathname.startsWith(p));
   if (!hasAccess) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -39,9 +44,9 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-  response.headers.set("x-user-id", token.sub ?? "");
-  response.headers.set("x-user-role", String(token.role ?? ""));
-  response.headers.set("x-company-id", String(token.companyId ?? ""));
+  response.headers.set("x-user-id", user.id ?? "");
+  response.headers.set("x-user-role", String(user.role ?? ""));
+  response.headers.set("x-company-id", String(user.companyId ?? ""));
   return response;
 }
 
