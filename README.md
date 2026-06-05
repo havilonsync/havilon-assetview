@@ -42,15 +42,16 @@ Open [http://localhost:3000](http://localhost:3000)
 - **Styling**: Tailwind CSS
 - **Database**: PostgreSQL + Prisma ORM (schema in `prisma/schema.prisma`)
 - **Icons**: Lucide React
-- **Auth**: JWT + bcrypt (production: add NextAuth.js)
+- **Auth**: NextAuth (credentials/JWT session) + role-based middleware
 
 ## Production Setup
 
 1. Provision PostgreSQL
 2. Set `DATABASE_URL` in `.env`
 3. Run `npx prisma migrate dev` to create tables
-4. Replace `src/lib/store.ts` imports with Prisma client calls
-5. Add authentication middleware
+4. Run `npx prisma generate` (Prisma Client is generated to `src/generated/prisma`)
+5. Authentication middleware is already active in `middleware.ts`
+6. Replace remaining `src/lib/store.ts` imports in dashboard pages with Prisma-backed data fetches
 
 ## Architecture
 

@@ -1,18 +1,19 @@
-// Prisma client singleton
-// Run `npx prisma generate` after setting DATABASE_URL to activate
-// This import will resolve once `npx prisma generate` has been run
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PrismaClient } = require("@prisma/client");
+type PrismaClientType = PrismaClient;
 
-type PrismaClientType = InstanceType<typeof PrismaClient>;
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClientType };
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClientType };
+function createPrismaClient() {
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 
-export const prisma: PrismaClientType =
-  globalForPrisma.prisma ||
-  new PrismaClient({
+  return new PrismaClient({
+    adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
   });
+}
+
+export const prisma: PrismaClientType = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
