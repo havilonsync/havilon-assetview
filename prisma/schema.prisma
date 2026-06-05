@@ -1,0 +1,664 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth & Multi-tenancy ──────────────────────────────────────────────
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("starter") // starter, pro, enterprise
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  properties    Property[]
+  leads         Lead[]
+  invoices      Invoice[]
+  trustAccounts TrustAccount[]
+  workflows     WorkflowTemplate[]
+  auditLogs     AuditLog[]
+  receipts      Receipt[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  companyId    String
+  email        String
+  passwordHash String
+  name         String
+  role         String   // admin, manager, owner, auditor, vendor, tenant
+  mfaEnabled   Boolean  @default(false)
+  mfaSecret    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      Company  @relation(fields: [companyId], references: [id])
+  auditLogs    AuditLog[]
+
+  @@unique([companyId, email])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  companyId String
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+// ─── CRM ──────────────────────────────────────────────────────────────
+model Lead {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  stage       String   @default("new") // new, proposal, negotiation, onboarding, closed_won, closed_lost
+  source      String?
+  pipelineValue Decimal?
+  propertyCount Int     @default(0)
+  notes       String?
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companyRel  Company  @relation(fields: [companyId], references: [id])
+  proposals   Proposal[]
+  activities  LeadActivity[]
+}
+
+model Proposal {
+  id         String   @id @default(uuid())
+  leadId     String
+  number     String   @unique
+  status     String   @default("draft") // draft, sent, accepted, rejected, expired
+  value      Decimal?
+  sentAt     DateTime?
+  expiresAt  DateTime?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  lead       Lead     @relation(fields: [leadId], references: [id])
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  type      String   // call, email, meeting, note
+  summary   String
+  createdAt DateTime @default(now())
+
+  lead      Lead     @relation(fields: [leadId], references: [id])
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────
+model Onboarding {
+  id          String   @id @default(uuid())
+  companyId   String
+  clientName  String
+  clientEmail String?
+  currentStep Int      @default(1)
+  totalSteps  Int      @default(7)
+  status      String   @default("in_progress") // in_progress, complete, paused
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  steps       OnboardingStep[]
+  documents   Document[]
+}
+
+model OnboardingStep {
+  id           String   @id @default(uuid())
+  onboardingId String
+  stepNumber   Int
+  name         String
+  status       String   @default("pending") // pending, in_progress, complete
+  completedAt  DateTime?
+  notes        String?
+
+  onboarding   Onboarding @relation(fields: [onboardingId], references: [id])
+}
+
+// ─── Asset Lifecycle ──────────────────────────────────────────────────
+model Asset {
+  id             String   @id @default(uuid())
+  companyId      String
+  assetCode      String   @unique
+  name           String
+  type           String   // residential, commercial, multi_family, single_family
+  status         String   @default("active") // active, disposed, pending
+  address        String
+  city           String
+  state          String
+  zip            String
+  acquiredAt     DateTime?
+  purchasePrice  Decimal?
+  currentValue   Decimal?
+  ownerId        String?
+  ownerName      String?
+  lienStatus     String   @default("none")
+  legalHolds     Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  properties     Property[]
+  lifecycleEvents LifecycleEvent[]
+  documents      Document[]
+  insurancePolicies InsurancePolicy[]
+}
+
+model LifecycleEvent {
+  id          String   @id @default(uuid())
+  assetId     String
+  eventType   String   // acquisition, lease, maintenance, inspection, insurance, legal, disposal
+  title       String
+  description String?
+  amount      Decimal?
+  occurredAt  DateTime @default(now())
+  recordedBy  String?
+  receiptId   String?
+
+  asset       Asset    @relation(fields: [assetId], references: [id])
+}
+
+// ─── Property, Building, Unit, Lease, Tenant ─────────────────────────
+model Property {
+  id          String   @id @default(uuid())
+  companyId   String
+  assetId     String?
+  name        String
+  address     String
+  city        String
+  state       String
+  zip         String
+  type        String   // residential, commercial, multi_family
+  totalUnits  Int      @default(1)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  asset       Asset?   @relation(fields: [assetId], references: [id])
+  units       Unit[]
+  workOrders  WorkOrder[]
+}
+
+model Unit {
+  id           String   @id @default(uuid())
+  propertyId   String
+  unitNumber   String
+  bedrooms     Int?
+  bathrooms    Decimal?
+  sqft         Int?
+  marketRent   Decimal?
+  status       String   @default("vacant") // occupied, vacant, maintenance
+
+  property     Property @relation(fields: [propertyId], references: [id])
+  leases       Lease[]
+}
+
+model Tenant {
+  id          String   @id @default(uuid())
+  companyId   String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  dob         DateTime?
+  ssn         String?  // encrypted
+  createdAt   DateTime @default(now())
+
+  leases      Lease[]
+}
+
+model Lease {
+  id            String   @id @default(uuid())
+  unitId        String
+  tenantId      String
+  startDate     DateTime
+  endDate       DateTime
+  monthlyRent   Decimal
+  depositAmount Decimal?
+  depositHeld   Decimal?
+  status        String   @default("active") // active, expired, terminated, pending
+  renewalSent   Boolean  @default(false)
+  signedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  unit          Unit     @relation(fields: [unitId], references: [id])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  payments      RentPayment[]
+}
+
+model RentPayment {
+  id          String   @id @default(uuid())
+  leaseId     String
+  amount      Decimal
+  dueDate     DateTime
+  paidDate    DateTime?
+  status      String   @default("pending") // pending, paid, late, partial
+  receiptId   String?
+  createdAt   DateTime @default(now())
+
+  lease       Lease    @relation(fields: [leaseId], references: [id])
+}
+
+// ─── Maintenance ──────────────────────────────────────────────────────
+model WorkOrder {
+  id           String   @id @default(uuid())
+  companyId    String
+  propertyId   String
+  unitId       String?
+  woNumber     String   @unique
+  title        String
+  description  String?
+  priority     String   @default("normal") // emergency, high, normal, low
+  status       String   @default("open") // open, scheduled, in_progress, pending_approval, complete, overdue
+  category     String?  // hvac, plumbing, electrical, structural, general
+  vendorId     String?
+  vendorName   String?
+  estimatedCost Decimal?
+  actualCost   Decimal?
+  scheduledDate DateTime?
+  completedAt  DateTime?
+  reportedBy   String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property     Property @relation(fields: [propertyId], references: [id])
+  bids         WorkOrderBid[]
+}
+
+model WorkOrderBid {
+  id          String   @id @default(uuid())
+  workOrderId String
+  vendorId    String?
+  vendorName  String
+  amount      Decimal
+  submittedAt DateTime @default(now())
+  status      String   @default("pending") // pending, accepted, rejected
+  notes       String?
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+}
+
+model CapitalProject {
+  id          String   @id @default(uuid())
+  companyId   String
+  propertyId  String?
+  name        String
+  description String?
+  budget      Decimal
+  spent       Decimal  @default(0)
+  status      String   @default("planning") // planning, active, complete, cancelled
+  startDate   DateTime?
+  endDate     DateTime?
+  vendorId    String?
+  vendorName  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Vendor {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  category    String?
+  email       String?
+  phone       String?
+  status      String   @default("pending") // preferred, approved, pending, suspended
+  licenseNo   String?
+  insuranceExpiry DateTime?
+  rating      Decimal?
+  createdAt   DateTime @default(now())
+}
+
+// ─── Insurance ────────────────────────────────────────────────────────
+model InsurancePolicy {
+  id           String   @id @default(uuid())
+  companyId    String
+  assetId      String?
+  carrier      String
+  policyNumber String
+  type         String   // property, liability, umbrella
+  coverageAmount Decimal?
+  premium      Decimal?
+  startDate    DateTime
+  endDate      DateTime
+  status       String   @default("active")
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  asset        Asset?   @relation(fields: [assetId], references: [id])
+  claims       InsuranceClaim[]
+}
+
+model InsuranceClaim {
+  id           String   @id @default(uuid())
+  policyId     String
+  claimNumber  String   @unique
+  incidentDate DateTime
+  filedDate    DateTime @default(now())
+  description  String
+  claimAmount  Decimal?
+  approvedAmount Decimal?
+  status       String   @default("filed") // filed, under_review, documentation_needed, approved, denied, litigation_hold
+  adjusterName String?
+  adjusterEmail String?
+  paidDate     DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  policy       InsurancePolicy @relation(fields: [policyId], references: [id])
+  documents    Document[]
+}
+
+// ─── Compliance ───────────────────────────────────────────────────────
+model ComplianceItem {
+  id          String   @id @default(uuid())
+  companyId   String
+  propertyId  String?
+  title       String
+  category    String   // inspection, certificate, license, disclosure, registration, filing
+  dueDate     DateTime
+  status      String   @default("upcoming") // upcoming, due_soon, overdue, complete
+  assignedTo  String?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LegalMatter {
+  id          String   @id @default(uuid())
+  companyId   String
+  propertyId  String?
+  type        String   // eviction, litigation, dispute
+  title       String
+  description String?
+  status      String   @default("active")
+  filedDate   DateTime?
+  hearingDate DateTime?
+  attorney    String?
+  plaintiff   String?
+  outcome     String?
+  legalHold   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  documents   Document[]
+}
+
+// ─── Communications ───────────────────────────────────────────────────
+model Communication {
+  id           String   @id @default(uuid())
+  companyId    String
+  type         String   // email, sms, call, notice, letter
+  direction    String   @default("outbound") // inbound, outbound
+  toAddress    String?
+  fromAddress  String?
+  subject      String?
+  body         String?
+  status       String   @default("draft") // draft, pending_approval, sent, delivered, failed, opened
+  isAutoGenerated Boolean @default(false)
+  approvedBy   String?
+  sentAt       DateTime?
+  relatedEntity String?
+  relatedEntityId String?
+  templateId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CommunicationTemplate {
+  id       String   @id @default(uuid())
+  companyId String
+  name     String
+  type     String
+  subject  String?
+  body     String
+  category String?
+  createdAt DateTime @default(now())
+}
+
+// ─── Revenue Operations ────────────────────────────────────────────────
+model Invoice {
+  id            String   @id @default(uuid())
+  companyId     String
+  invoiceNumber String   @unique
+  toName        String
+  toEmail       String?
+  description   String
+  lineItems     Json?
+  subtotal      Decimal
+  taxAmount     Decimal  @default(0)
+  total         Decimal
+  dueDate       DateTime
+  status        String   @default("pending") // pending, paid, overdue, cancelled
+  paidAt        DateTime?
+  paidAmount    Decimal?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company  @relation(fields: [companyId], references: [id])
+}
+
+model PricingRule {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  type        String   // management_fee, leasing_fee, renewal_fee, maintenance_markup, late_fee
+  rateType    String   // percentage, flat, tiered
+  rate        Decimal
+  minAmount   Decimal?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// ─── Trust Accounting ──────────────────────────────────────────────────
+model TrustAccount {
+  id          String   @id @default(uuid())
+  companyId   String
+  ownerName   String
+  ownerId     String?
+  balance     Decimal  @default(0)
+  reserveBalance Decimal @default(0)
+  lastStatement DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  transactions TrustTransaction[]
+  statements   OwnerStatement[]
+}
+
+model TrustTransaction {
+  id            String   @id @default(uuid())
+  trustAccountId String
+  type          String   // deposit, disbursement, expense, fee, reserve
+  amount        Decimal
+  description   String
+  referenceId   String?
+  occurredAt    DateTime @default(now())
+  createdBy     String?
+
+  trustAccount  TrustAccount @relation(fields: [trustAccountId], references: [id])
+}
+
+model OwnerStatement {
+  id             String   @id @default(uuid())
+  trustAccountId String
+  period         String   // e.g. "2026-05"
+  grossRent      Decimal
+  expenses       Decimal
+  managementFee  Decimal
+  reserveContrib Decimal  @default(0)
+  netDisbursement Decimal
+  status         String   @default("draft") // draft, approved, sent
+  generatedAt    DateTime @default(now())
+  sentAt         DateTime?
+
+  trustAccount   TrustAccount @relation(fields: [trustAccountId], references: [id])
+}
+
+// ─── Workflow ──────────────────────────────────────────────────────────
+model WorkflowTemplate {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  trigger     String
+  description String?
+  steps       Json
+  automations Json?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  instances   WorkflowInstance[]
+}
+
+model WorkflowInstance {
+  id           String   @id @default(uuid())
+  templateId   String
+  entityType   String
+  entityId     String
+  currentStep  Int      @default(1)
+  status       String   @default("active") // active, paused, complete, cancelled
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  stepHistory  Json?
+
+  template     WorkflowTemplate @relation(fields: [templateId], references: [id])
+}
+
+// ─── Documents & Receipts ──────────────────────────────────────────────
+model Document {
+  id             String   @id @default(uuid())
+  companyId      String
+  name           String
+  type           String   // deed, lease, insurance, inspection, legal, correspondence, financial
+  fileUrl        String?
+  fileSize       Int?
+  mimeType       String?
+  assetId        String?
+  claimId        String?
+  legalMatterId  String?
+  onboardingId   String?
+  hash           String?
+  uploadedBy     String?
+  createdAt      DateTime @default(now())
+
+  asset          Asset?         @relation(fields: [assetId], references: [id])
+  claim          InsuranceClaim? @relation(fields: [claimId], references: [id])
+  legalMatter    LegalMatter?   @relation(fields: [legalMatterId], references: [id])
+  onboarding     Onboarding?    @relation(fields: [onboardingId], references: [id])
+}
+
+model Receipt {
+  id           String   @id @default(uuid())
+  companyId    String
+  receiptNumber String  @unique
+  type         String   // payment, document, lease, claim, disbursement, action
+  issuedTo     String
+  eventType    String
+  eventDescription String
+  entityType   String?
+  entityId     String?
+  amount       Decimal?
+  hash         String
+  isImmutable  Boolean  @default(true)
+  deliveredVia String?
+  createdAt    DateTime @default(now())
+
+  company      Company  @relation(fields: [companyId], references: [id])
+}
+
+// ─── Audit Portal ──────────────────────────────────────────────────────
+model AuditEngagement {
+  id           String   @id @default(uuid())
+  companyId    String
+  firmName     String
+  auditorName  String
+  auditorEmail String
+  scope        String
+  period       String
+  status       String   @default("active") // active, pending_docs, complete, closed
+  engagementLetter String?
+  startedAt    DateTime @default(now())
+  closedAt     DateTime?
+
+  requests     AuditDocumentRequest[]
+}
+
+model AuditDocumentRequest {
+  id           String   @id @default(uuid())
+  engagementId String
+  description  String
+  status       String   @default("pending") // pending, in_review, provided
+  providedAt   DateTime?
+  notes        String?
+
+  engagement   AuditEngagement @relation(fields: [engagementId], references: [id])
+}
+
+// ─── Closeout ──────────────────────────────────────────────────────────
+model CloseoutEngagement {
+  id           String   @id @default(uuid())
+  companyId    String
+  clientName   String
+  propertyCount Int
+  status       String   @default("in_progress")
+  initiatedAt  DateTime @default(now())
+  completedAt  DateTime?
+  checklistItems Json?
+  exportPackage String?
+}
+
+// ─── Performance Analytics ──────────────────────────────────────────────
+model PerformanceSnapshot {
+  id              String   @id @default(uuid())
+  companyId       String
+  propertyId      String?
+  period          String   // e.g. "2026-05" or "2026-Q2" or "2026"
+  granularity     String   // day, week, month, quarter, year
+  revenue         Decimal  @default(0)
+  expenses        Decimal  @default(0)
+  noi             Decimal  @default(0)
+  occupancyRate   Decimal  @default(0)
+  maintenanceCost Decimal  @default(0)
+  managementFee   Decimal  @default(0)
+  insuranceCost   Decimal  @default(0)
+  vacancyLoss     Decimal  @default(0)
+  latePayments    Decimal  @default(0)
+  capitalExpenditure Decimal @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, propertyId, period, granularity])
+  @@index([companyId, granularity])
+}
