@@ -1,4 +1,5 @@
 import { auth } from "@/auth/config";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 
@@ -47,6 +48,13 @@ export async function writeAuditLog(
   metadata?: Record<string, unknown>
 ) {
   await prisma.auditLog.create({
-    data: { companyId, userId, action, entity, entityId, metadata },
+    data: {
+      companyId,
+      userId,
+      action,
+      entity,
+      entityId,
+      metadata: metadata as Prisma.InputJsonValue | undefined,
+    },
   });
 }

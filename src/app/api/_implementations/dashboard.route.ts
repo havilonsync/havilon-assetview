@@ -8,8 +8,10 @@ export async function GET(request: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
   const { companyId } = ctx;
 
-  const [assetStats, openWOs, overdueWOs, overdueCompliance, trustAccounts, expiringLeases, openInvoices, recentActivity] = await Promise.all([
-    prisma.asset.aggregate({ where: { companyId }, _count: { id: true }, _sum: { units: true, occupiedUnits: true, currentValue: true } }),
+  const [assetStats, propertyStats, occupiedUnits, openWOs, overdueWOs, overdueCompliance, trustAccounts, expiringLeases, openInvoices, recentActivity] = await Promise.all([
+    prisma.asset.aggregate({ where: { companyId }, _count: { id: true }, _sum: { currentValue: true } }),
+    prisma.property.aggregate({ where: { companyId }, _sum: { totalUnits: true } }),
+    prisma.lease.count({ where: { unit: { property: { companyId } }, status: "active" } }),
     prisma.workOrder.count({ where: { companyId, status: { notIn: ["complete", "cancelled"] } } }),
     prisma.workOrder.count({ where: { companyId, status: "overdue" } }),
     prisma.complianceItem.count({ where: { companyId, status: "overdue" } }),
@@ -19,8 +21,7 @@ export async function GET(request: NextRequest) {
     prisma.auditLog.findMany({ where: { companyId }, include: { user: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 10 }),
   ]);
 
-  const totalUnits = Number(assetStats._sum.units ?? 0);
-  const occupiedUnits = Number(assetStats._sum.occupiedUnits ?? 0);
+  const totalUnits = Number(propertyStats._sum.totalUnits ?? 0);
 
   return NextResponse.json({
     assets: { count: assetStats._count.id, totalValue: Number(assetStats._sum.currentValue ?? 0) },

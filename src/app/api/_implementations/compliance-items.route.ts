@@ -41,10 +41,24 @@ export async function GET(request: NextRequest) {
 
   const items = await prisma.complianceItem.findMany({
     where: { companyId: ctx.companyId, ...(status ? { status } : {}) },
-    include: { property: { select: { name: true, address: true } } },
     orderBy: [{ status: "asc" }, { dueDate: "asc" }],
   });
-  return NextResponse.json({ items });
+
+  const propertyIds = Array.from(new Set(items.map((i) => i.propertyId).filter((id): id is string => Boolean(id))));
+  const properties = propertyIds.length
+    ? await prisma.property.findMany({
+        where: { companyId: ctx.companyId, id: { in: propertyIds } },
+        select: { id: true, name: true, address: true },
+      })
+    : [];
+
+  const propertyById = new Map(properties.map((p) => [p.id, p]));
+  const itemsWithProperty = items.map((item) => ({
+    ...item,
+    property: item.propertyId ? propertyById.get(item.propertyId) ?? null : null,
+  }));
+
+  return NextResponse.json({ items: itemsWithProperty });
 }
 
 export async function POST(request: NextRequest) {

@@ -8,8 +8,9 @@ export async function POST(request: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
 
   // Gather live data from DB for context
-  const [assets, leases, workOrders, complianceItems, trustAccounts, invoices] = await Promise.all([
+  const [assets, properties, leases, workOrders, complianceItems, trustAccounts, invoices] = await Promise.all([
     prisma.asset.findMany({ where: { companyId: ctx.companyId } }),
+    prisma.property.findMany({ where: { companyId: ctx.companyId }, select: { totalUnits: true } }),
     prisma.lease.findMany({ where: { unit: { property: { companyId: ctx.companyId } } } }),
     prisma.workOrder.findMany({ where: { companyId: ctx.companyId, status: { not: "complete" } } }),
     prisma.complianceItem.findMany({ where: { companyId: ctx.companyId, status: { in: ["overdue", "due_soon"] } } }),
@@ -17,8 +18,8 @@ export async function POST(request: NextRequest) {
     prisma.invoice.findMany({ where: { companyId: ctx.companyId, status: { in: ["pending", "overdue"] } } }),
   ]);
 
-  const totalUnits = assets.reduce((s, a) => s + a.units, 0);
-  const occupiedUnits = assets.reduce((s, a) => s + a.occupiedUnits, 0);
+  const totalUnits = properties.reduce((s, p) => s + p.totalUnits, 0);
+  const occupiedUnits = leases.filter((l) => l.status === "active").length;
   const trustBalance = trustAccounts.reduce((s, t) => s + Number(t.balance), 0);
   const overdueInvoices = invoices.filter((i) => i.status === "overdue");
   const expiringLeases = leases.filter((l) => {
