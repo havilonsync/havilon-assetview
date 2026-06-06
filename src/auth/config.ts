@@ -36,19 +36,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
+        const password = credentials?.password as string | undefined;
+        if (!email || !password) return null;
 
         const user = await prisma.user.findFirst({
-          where: { email: credentials.email as string },
+          where: { email: { equals: email, mode: "insensitive" } },
           include: { company: { select: { status: true } } },
         });
 
-        if (!user || user.company.status !== "active") return null;
+        if (!user || user.company.status !== "active" || !user.passwordHash) return null;
 
-        const passwordMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        );
+        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
         if (!passwordMatch) return null;
 
         prisma.user
