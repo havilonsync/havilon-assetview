@@ -55,6 +55,14 @@ export async function apiCall(
 // Module-specific hooks
 export function useDashboard() { return useAPI<any>("/api/dashboard"); }
 export function useLeads(stage?: string) { return useAPI<any>(stage ? `/api/leads?stage=${stage}` : "/api/leads"); }
+export function useOnboardings() { return useAPI<any>("/api/onboarding"); }
+export function useOnboardingSteps(onboardingId?: string | null) {
+  return useAPI<any>(onboardingId ? `/api/onboarding/steps?onboardingId=${onboardingId}` : null);
+}
+export function useAssets() { return useAPI<any>("/api/assets"); }
+export function useLifecycleEvents(assetId?: string | null) {
+  return useAPI<any>(assetId ? `/api/assets/lifecycle?assetId=${assetId}` : null);
+}
 export function useProperties() { return useAPI<any>("/api/properties"); }
 export function useLeases(status?: string) { return useAPI<any>(status ? `/api/leases?status=${status}` : "/api/leases"); }
 export function useWorkOrders(status?: string, priority?: string) {
@@ -62,6 +70,9 @@ export function useWorkOrders(status?: string, priority?: string) {
   if (status) params.set("status", status);
   if (priority) params.set("priority", priority);
   return useAPI<any>(`/api/work-orders?${params}`);
+}
+export function useInsurancePolicies(status?: string) {
+  return useAPI<any>(status ? `/api/insurance-policies?status=${status}` : "/api/insurance-policies");
 }
 export function useInsuranceClaims(status?: string) { return useAPI<any>(status ? `/api/insurance-claims?status=${status}` : "/api/insurance-claims"); }
 export function useComplianceItems(status?: string) { return useAPI<any>(status ? `/api/compliance-items?status=${status}` : "/api/compliance-items"); }
@@ -75,3 +86,4 @@ export function useWorkflowInstances(status?: string) { return useAPI<any>(statu
 export function useReceipts() { return useAPI<any>("/api/receipts"); }
 export function useAuditLog(entity?: string) { return useAPI<any>(entity ? `/api/audit-log?entity=${entity}` : "/api/audit-log"); }
 export function useUsers() { return useAPI<any>("/api/users"); }
+export function useMfaStatus() { return useAPI<any>("/api/mfa"); }

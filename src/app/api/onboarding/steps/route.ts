@@ -1,0 +1,1 @@
+export { GET, POST, PATCH } from "@/app/api/_implementations/onboarding-steps.route";
