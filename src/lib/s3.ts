@@ -24,7 +24,13 @@ function getRegion() {
 
 function getClient() {
   if (!cachedClient) {
-    cachedClient = new S3Client({ region: getRegion() });
+    cachedClient = new S3Client({
+      region: getRegion(),
+      credentials: {
+        accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
+        secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
+      },
+    });
   }
   return cachedClient;
 }

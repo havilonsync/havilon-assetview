@@ -1,7 +1,5 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/db/prisma";
 
 // Full Prisma implementation: src/app/api/_implementations/
 // Activate after: npm install && npx prisma generate && npx prisma migrate dev
@@ -36,23 +34,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
+        if (!credentials?.email || !credentials?.password) return null;
 
         const user = await prisma.user.findFirst({
-          where: { email },
-          select: { id: true, email: true, name: true, role: true, companyId: true, passwordHash: true },
+          where: { email: credentials.email as string },
+          include: { company: { select: { status: true } } },
         });
-        if (!user?.passwordHash) return null;
 
-        const isValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isValid) return null;
+        if (!user || user.company.status !== "active") return null;
 
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
+        const passwordMatch = await bcrypt.compare(
+          credentials.password as string,
+          user.passwordHash
+        );
+        if (!passwordMatch) return null;
+
+        prisma.user
+          .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+          .catch(() => {});
 
         return {
           id: user.id,
