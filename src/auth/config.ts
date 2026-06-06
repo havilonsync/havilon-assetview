@@ -20,6 +20,9 @@ function dbFingerprint() {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
+  trustHost: true,
+  // Avoid forcing secure cookies during local HTTP development.
+  useSecureCookies: process.env.NODE_ENV === "production",
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login", error: "/login" },
   callbacks: {
