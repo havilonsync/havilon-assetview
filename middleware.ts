@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth/config";
+import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 const PUBLIC_ROUTES = ["/login", "/register", "/api/auth", "/api/stripe/webhook"];
 
@@ -14,17 +15,22 @@ const ROLE_ROUTES: Record<string, string[]> = {
   tenant:  ["/properties","/communications"],
 };
 
-export default auth((request) => {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const user = request.auth?.user as
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  });
+  const user = token as
     | {
+    sub?: string;
     id?: string;
     role?: string;
     companyId?: string;
     }
     | undefined;
-  const userId = user?.id;
+  const userId = user?.id ?? user?.sub;
 
   if (pathname.startsWith("/login")) {
     if (userId) {
@@ -69,7 +75,7 @@ export default auth((request) => {
   response.headers.set("x-user-role", String(user.role ?? ""));
   response.headers.set("x-company-id", String(user.companyId ?? ""));
   return response;
-});
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|_next/webpack-hmr).*)"],
