@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/auth/config";
+import { getToken } from "next-auth/jwt";
 
 const PUBLIC_ROUTES = ["/login", "/register", "/api/auth", "/api/stripe/webhook"];
 
@@ -19,8 +19,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) return NextResponse.next();
 
-  const session = await auth();
-  const user = session?.user as {
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  });
+  const user = token as {
     id?: string;
     role?: string;
     companyId?: string;
