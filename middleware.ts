@@ -17,19 +17,27 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) return NextResponse.next();
 
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   });
   const user = token as {
+    sub?: string;
     id?: string;
     role?: string;
     companyId?: string;
   } | undefined;
+  const userId = user?.id ?? user?.sub;
 
-  if (!user?.id) {
+  if (pathname.startsWith("/login")) {
+    if (userId) return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.next();
+  }
+
+  if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) return NextResponse.next();
+
+  if (!userId) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -47,7 +55,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-  response.headers.set("x-user-id", user.id ?? "");
+  response.headers.set("x-user-id", userId ?? "");
   response.headers.set("x-user-role", String(user.role ?? ""));
   response.headers.set("x-company-id", String(user.companyId ?? ""));
   return response;
