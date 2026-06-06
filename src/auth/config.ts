@@ -1,8 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-
-// Full Prisma implementation: src/app/api/_implementations/
-// Activate after: npm install && npx prisma generate && npx prisma migrate dev
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/db/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -34,18 +33,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // SCAFFOLD: Replace with real Prisma lookup from _implementations/auth.ts
-        // For demo: accepts any email with password "Demo1234!"
-        if (credentials?.password === "Demo1234!" && credentials?.email) {
-          return {
-            id: "demo-user",
-            email: credentials.email as string,
-            name: "Demo User",
-            role: "admin",
-            companyId: "demo-company",
-          } as any;
-        }
-        return null;
+        if (!credentials?.email || !credentials?.password) return null;
+
+        const user = await prisma.user.findFirst({
+          where: { email: credentials.email as string },
+          include: { company: { select: { status: true } } },
+        });
+
+        if (!user || user.company.status !== "active") return null;
+
+        const passwordMatch = await bcrypt.compare(
+          credentials.password as string,
+          user.passwordHash
+        );
+        if (!passwordMatch) return null;
+
+        prisma.user
+          .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+          .catch(() => {});
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          companyId: user.companyId,
+        } as any;
       },
     }),
   ],
