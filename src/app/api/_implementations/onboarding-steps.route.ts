@@ -42,7 +42,7 @@ async function syncOnboardingProgress(onboardingId: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const ctx = await requireRole(request, ["admin", "manager"]);
+  const ctx = await requireRole(request, ["admin", "manager", "owner"]);
   if (ctx instanceof NextResponse) return ctx;
 
   const { searchParams } = new URL(request.url);
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const ctx = await requireRole(request, ["admin", "manager"]);
+  const ctx = await requireRole(request, ["admin", "manager", "owner"]);
   if (ctx instanceof NextResponse) return ctx;
 
   const body = await request.json();
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const ctx = await requireRole(request, ["admin", "manager"]);
+  const ctx = await requireRole(request, ["admin", "manager", "owner"]);
   if (ctx instanceof NextResponse) return ctx;
 
   const body = await request.json();
