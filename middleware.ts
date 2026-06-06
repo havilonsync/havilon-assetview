@@ -18,9 +18,20 @@ const ROLE_ROUTES: Record<string, string[]> = {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const authCookieName =
+    request.cookies.has("__Secure-authjs.session-token")
+      ? "__Secure-authjs.session-token"
+      : request.cookies.has("authjs.session-token")
+      ? "authjs.session-token"
+      : request.cookies.has("__Secure-next-auth.session-token")
+      ? "__Secure-next-auth.session-token"
+      : "next-auth.session-token";
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+    secureCookie: request.nextUrl.protocol === "https:",
+    cookieName: authCookieName,
   });
   const user = token as
     | {

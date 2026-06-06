@@ -7,7 +7,8 @@ import { Building2, Loader2, Eye, EyeOff } from "lucide-react";
 export default function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
+  const callbackParam = params.get("callbackUrl");
+  const callbackUrl = callbackParam?.startsWith("/") ? callbackParam : "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -18,10 +19,30 @@ export default function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await signIn("credentials", { email, password, redirect: false, callbackUrl });
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+      redirectTo: callbackUrl,
+    });
     setLoading(false);
-    if (result?.error) setError("Invalid email or password.");
-    else window.location.href = result?.url ?? callbackUrl;
+    if (!result) {
+      setError("Unable to sign in. Please try again.");
+      return;
+    }
+
+    if (result.error) {
+      setError("Invalid email or password.");
+      return;
+    }
+
+    if (result.ok) {
+      router.replace(callbackUrl);
+      router.refresh();
+      return;
+    }
+
+    setError("Unable to sign in. Please try again.");
   }
 
   return (
