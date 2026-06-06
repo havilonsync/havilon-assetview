@@ -64,7 +64,7 @@ export default function LoginForm() {
           </button>
         </form>
         <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-400 text-center">
-          Demo: any email · password <strong>Demo1234!</strong>
+          Demo: admin@havilon-demo.com or mgr@havilon-demo.com · password <strong>Demo1234!</strong>
         </div>
       </div>
     </div>

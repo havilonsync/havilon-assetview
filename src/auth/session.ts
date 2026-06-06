@@ -15,7 +15,21 @@ export async function getServerSession(): Promise<AuthContext | null> {
   const session = await auth();
   if (!session?.user) return null;
   const user = session.user as any;
-  return { userId: user.id, companyId: user.companyId, role: user.role, email: user.email ?? "" };
+
+  if (!user.id) return null;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, companyId: true, role: true, email: true },
+  });
+  if (!dbUser) return null;
+
+  return {
+    userId: dbUser.id,
+    companyId: dbUser.companyId,
+    role: dbUser.role,
+    email: dbUser.email ?? "",
+  };
 }
 
 /** Use in API Route handlers */
