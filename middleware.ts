@@ -31,13 +31,27 @@ export async function middleware(request: NextRequest) {
   const userId = user?.id ?? user?.sub;
 
   if (pathname.startsWith("/login")) {
-    if (userId) return NextResponse.redirect(new URL("/dashboard", request.url));
+    if (userId) {
+      console.error("[middleware] authenticated user hit /login; redirecting to /dashboard", {
+        userId,
+        role: user?.role,
+      });
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
     return NextResponse.next();
   }
 
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) return NextResponse.next();
 
   if (!userId) {
+    console.error("[middleware] unauthorized request; redirecting to /login", {
+      pathname,
+      hasAuthCookie:
+        request.cookies.has("authjs.session-token") ||
+        request.cookies.has("__Secure-authjs.session-token") ||
+        request.cookies.has("next-auth.session-token") ||
+        request.cookies.has("__Secure-next-auth.session-token"),
+    });
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";

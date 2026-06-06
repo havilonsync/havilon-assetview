@@ -18,10 +18,10 @@ export default function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await signIn("credentials", { email, password, redirect: false });
+    const result = await signIn("credentials", { email, password, redirect: false, callbackUrl });
     setLoading(false);
     if (result?.error) setError("Invalid email or password.");
-    else router.push(callbackUrl);
+    else window.location.href = result?.url ?? callbackUrl;
   }
 
   return (
